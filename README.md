@@ -19,7 +19,7 @@ Open `out/dashboard.html` in a browser.
 Options:
 
 ```bash
-node src/main.ts [logs.json] [--config config/thresholds.json] [--as-of <ISO>|now] [--out dir] [--summary]
+node src/main.ts [logs.json] [--config config/thresholds.jsonc] [--as-of <ISO>|now] [--out dir] [--summary]
 ```
 
 - `--as-of`: the end of the window. It defaults to the newest log line because the seed data is historical. Use `now` in production, so a dead log feed also shows up as silence. Either way, if the newest log is older than `silentAfterMinutes`, a banner says the report is historical. On the seed data that banner always shows, which is expected: the logs are from August 2026.
@@ -27,7 +27,7 @@ node src/main.ts [logs.json] [--config config/thresholds.json] [--as-of <ISO>|no
 
 ## Change a threshold live
 
-Every number is in `config/thresholds.json`. The failure-rate defaults are degraded ≥ 1% and unhealthy ≥ 5%, and only apply once there are at least 2 failures. For example, to treat 429s as unhealthy above 25%:
+Every number is in `config/thresholds.jsonc`. The failure-rate defaults are degraded ≥ 1% and unhealthy ≥ 5%, and only apply once there are at least 2 failures. For example, to treat 429s as unhealthy above 25%:
 
 ```json
 "rateLimitedPct": { "degraded": 10, "unhealthy": 25 }
@@ -48,7 +48,7 @@ Then run `npm run report` again. DocuSign goes from degraded to unhealthy.
 ## Layout
 
 ```
-config/thresholds.json   all thresholds, per-integration baselines, criticality
+config/thresholds.jsonc  all thresholds, per-integration baselines, criticality
 src/load.ts              parse + validate (bad rows rejected and reported)
 src/classify.ts          one outcome per request + owner per outcome
 src/aggregate.ts         per-integration metrics for the window

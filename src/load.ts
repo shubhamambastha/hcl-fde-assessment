@@ -1,6 +1,7 @@
 // Parse + validate raw log rows. Port of starter `load_logs`, but bad rows are
 // rejected and counted instead of crashing or being silently skipped.
 import { readFileSync } from "node:fs";
+import type { Config } from "./evaluate.ts";
 
 export type LogRow = {
   integration: string;
@@ -45,4 +46,10 @@ export function parseLogs(raw: unknown): LoadResult {
 
 export function loadLogs(path: string): LoadResult {
   return parseLogs(JSON.parse(readFileSync(path, "utf8")));
+}
+
+// Config is JSON with whole-line `//` comments (.jsonc). Only full comment lines are stripped,
+// so a "//" inside a string value can never be mistaken for a comment.
+export function loadConfig(path: string): Config {
+  return JSON.parse(readFileSync(path, "utf8").replace(/^\s*\/\/.*$/gm, ""));
 }

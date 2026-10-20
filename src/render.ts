@@ -103,7 +103,7 @@ ${cards}
 </section>
 <div class="legend"><span><span class="cell ok"></span>success</span><span><span class="cell warn"></span>rate-limited (429)</span>
 <span><span class="cell bad"></span>error (5xx / auth / 4xx)</span><span><span class="cell timeout"></span>timeout</span><span>One square = one request, oldest first. Hover for time.</span></div>
-<footer>Statuses are rule-based (config/thresholds.json). Sorted worst first, critical integrations first within a status.</footer>
+<footer>Statuses are rule-based (config/thresholds.jsonc). Sorted worst first, critical integrations first within a status.</footer>
 </main></body></html>
 `;
 }

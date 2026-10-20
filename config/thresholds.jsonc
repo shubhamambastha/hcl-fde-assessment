@@ -1,0 +1,55 @@
+// Health rules for every integration. Change a value, then run `npm run report` again.
+// Each band has two levels: reaching "degraded" turns an integration amber, reaching "unhealthy" turns it red.
+// The worst signal wins: one red rule makes the whole integration red.
+{
+  // How far back each report looks, in minutes, ending at --as-of (default: the newest log line).
+  // 60 = the last hour. A production morning digest would use 1440 (24 h).
+  "windowMinutes": 60,
+
+  // Below this many requests in the window, an integration with no other problems shows
+  // "insufficient data" instead of green. Also the minimum number of successful requests
+  // needed before p95 latency is judged at all.
+  "minRequests": 10,
+
+  // The failure-rate and 429 rules only fire once there are at least this many failures.
+  // Stops a single blip turning a low-volume integration red (1 failure in 12 = 8.3%).
+  // Auth failures (401/403) ignore this: one is enough to flag.
+  "minFailures": 2,
+
+  // Hard failures (5xx, timeouts, 401/403, other 4xx) as a % of ALL requests in the window.
+  // 1 = amber at 1% failing, 5 = red at 5% failing.
+  "failureRatePct": { "degraded": 1, "unhealthy": 5 },
+
+  // 429 "rate limited" responses as a % of all requests. Tracked separately from failures because
+  // throttled calls are usually retried. If retries are NOT happening, lower "unhealthy" (e.g. to 25) to flag sooner.
+  "rateLimitedPct": { "degraded": 10, "unhealthy": 50 },
+
+  // p95 latency of successful requests divided by that integration's own baselineP95Ms (below).
+  // 2 = amber at twice its normal speed, 4 = red at four times.
+  "p95VsBaseline": { "degraded": 2, "unhealthy": 4 },
+
+  // Request count divided by expected count (expectedPerHour scaled to the window).
+  // Lower is worse: below 0.5 (half the normal traffic) = amber, below 0.2 = red.
+  "volumeVsExpected": { "degraded": 0.5, "unhealthy": 0.2 },
+
+  // Minutes with no requests before an integration counts as silent (red). The real limit is the
+  // larger of this and 3 missed requests at its expected rate, so slow integrations aren't flagged
+  // for normal gaps. Also used for the "this report is historical" banner when the newest log is
+  // older than this.
+  "silentAfterMinutes": 15,
+
+  // One entry per integration we expect to see. Names must match the "integration" field in the logs.
+  //   critical        - sorted first within its status; does NOT change the status itself.
+  //   expectedPerHour - normal request volume; drives the volume and silence rules. Leave it out and
+  //                     those two rules are skipped for that integration.
+  //   baselineP95Ms   - normal p95 latency in ms; drives the latency rule. Leave it out to skip that rule.
+  // An integration that shows up in the logs but not here is still checked, but only by the failure, auth and 429 rules.
+  // The baselines below were set from the seed hour itself. In production they would come from a trailing 7-day p95.
+  "integrations": {
+    "ADP Payroll Sync": { "critical": true, "expectedPerHour": 12, "baselineP95Ms": 250 },
+    "DocuSign Envelope API": { "critical": false, "expectedPerHour": 12, "baselineP95Ms": 750 },
+    "Greenhouse ATS Sync": { "critical": false, "expectedPerHour": 12, "baselineP95Ms": 220 },
+    "Slack Notifications": { "critical": false, "expectedPerHour": 12, "baselineP95Ms": 160 },
+    "Workday Directory Sync": { "critical": false, "expectedPerHour": 12, "baselineP95Ms": 140 }
+  }
+}

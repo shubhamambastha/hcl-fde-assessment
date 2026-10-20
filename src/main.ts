@@ -1,8 +1,8 @@
 // Batch entry point: node src/main.ts [logs.json] [--config path] [--as-of ISO|now] [--out dir] [--summary]
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
-import { loadLogs } from "./load.ts";
+import { loadConfig, loadLogs } from "./load.ts";
 import { buildReport, defaultAsOf } from "./report.ts";
 import { renderCli, renderHtml } from "./render.ts";
 import { summarise } from "./summarise.ts";
@@ -11,14 +11,14 @@ import type { Config } from "./evaluate.ts";
 const { values, positionals } = parseArgs({
   allowPositionals: true,
   options: {
-    config: { type: "string", default: "config/thresholds.json" },
+    config: { type: "string", default: "config/thresholds.jsonc" },
     "as-of": { type: "string" },
     out: { type: "string", default: "out" },
     summary: { type: "boolean", default: false },
   },
 });
 
-const cfg: Config = JSON.parse(readFileSync(values.config, "utf8"));
+const cfg: Config = loadConfig(values.config);
 const load = loadLogs(positionals[0] ?? "data/integration_logs.json");
 const asOfArg = values["as-of"];
 const asOf = !asOfArg ? defaultAsOf(load) : asOfArg === "now" ? new Date() : new Date(asOfArg);

@@ -26,7 +26,7 @@ There are 60 rows: 5 integrations × 12 requests, one every 5 minutes from 09:00
 
 ## 4. Approach
 
-A batch job made of pure functions. Every threshold lives in `config/thresholds.json`.
+A batch job made of pure functions. Every threshold lives in `config/thresholds.jsonc`.
 
 ```
 logs → load (reject + count bad rows) → classify each request

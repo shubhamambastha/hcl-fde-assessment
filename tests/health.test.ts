@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
-import { loadLogs, parseLogs, type LogRow } from "../src/load.ts";
+import { loadConfig, loadLogs, parseLogs, type LogRow } from "../src/load.ts";
 import { classify } from "../src/classify.ts";
 import { aggregateOne } from "../src/aggregate.ts";
 import { evaluate, type Config } from "../src/evaluate.ts";
 import { buildReport, defaultAsOf } from "../src/report.ts";
 
-const baseCfg: Config = JSON.parse(readFileSync("config/thresholds.json", "utf8"));
+const baseCfg: Config = loadConfig("config/thresholds.jsonc");
 const T0 = Date.parse("2026-08-04T09:00:00Z");
 const ASOF = new Date(T0 + 55 * 60000);
 
