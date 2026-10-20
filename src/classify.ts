@@ -31,6 +31,7 @@ export function classify(row: LogRow): Outcome {
   const c = row.statusCode;
   if (c !== null) {
     if (c >= 200 && c < 300) return "success";
+    if (c === 408) return "timeout"; // Request Timeout: same cause and owner as a client-side timeout
     if (c === 429) return "rate_limited";
     if (c === 401 || c === 403) return "auth";
     if (c >= 400 && c < 500) return "client_error";

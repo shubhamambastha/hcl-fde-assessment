@@ -13,10 +13,16 @@ export type Report = {
   summary?: { text: string; model: string };
 };
 
-// A loop, not Math.max(...rows): spreading ~100k+ arguments overflows the call stack.
+// Loops, not Math.max(...rows): spreading ~100k+ arguments overflows the call stack.
 function newestLog(rows: LogRow[]): Date | null {
   let t = -Infinity;
   for (const r of rows) if (r.timestamp.getTime() > t) t = r.timestamp.getTime();
+  return Number.isFinite(t) ? new Date(t) : null;
+}
+
+function oldestLog(rows: LogRow[]): Date | null {
+  let t = Infinity;
+  for (const r of rows) if (r.timestamp.getTime() < t) t = r.timestamp.getTime();
   return Number.isFinite(t) ? new Date(t) : null;
 }
 
@@ -30,7 +36,13 @@ function age(minutes: number): string {
 export function buildReport({ rows, rejected }: LoadResult, cfg: Config, asOf: Date, now = new Date()): Report {
   const windowStart = new Date(asOf.getTime() - cfg.windowMinutes * 60000);
   const stats = aggregate(rows, windowStart, asOf, Object.keys(cfg.integrations));
-  const { overall, sorted } = rollup(stats.map((s) => evaluate(s, cfg, asOf)));
+  // Expected volume only counts the part of the window the logs span. Coverage is global, from ALL
+  // integrations: per-integration coverage would excuse one that went quiet and then sent a single request.
+  const oldest = oldestLog(rows);
+  const coveredMinutes = oldest
+    ? Math.max(0, (asOf.getTime() - Math.max(windowStart.getTime(), oldest.getTime())) / 60000)
+    : cfg.windowMinutes;
+  const { overall, sorted } = rollup(stats.map((s) => evaluate(s, cfg, asOf, coveredMinutes)));
 
   // The monitor must not fail silently: whatever --as-of says, old data gets a loud banner.
   const newest = newestLog(rows);

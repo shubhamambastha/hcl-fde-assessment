@@ -1,9 +1,11 @@
 // Health rules for every integration. Change a value, then run `npm run report` again.
 // Each band has two levels: reaching "degraded" turns an integration amber, reaching "unhealthy" turns it red.
 // The worst signal wins: one red rule makes the whole integration red.
+// Every key is checked at startup: a typo or a missing key stops the run instead of quietly disabling a rule.
 {
   // How far back each report looks, in minutes, ending at --as-of (default: the newest log line).
-  // 60 = the last hour. A production morning digest would use 1440 (24 h).
+  // 60 = the last hour. A production morning digest would use 1440 (24 h). Expected volume only
+  // counts the part of the window the logs actually cover, so 1440 on the 1-hour seed data is safe.
   "windowMinutes": 60,
 
   // Below this many requests in the window, an integration with no other problems shows

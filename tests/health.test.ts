@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadConfig, loadLogs, parseLogs, type LogRow } from "../src/load.ts";
+import { loadConfig, loadLogs, parseLogs, validateConfig, type LogRow } from "../src/load.ts";
 import { classify } from "../src/classify.ts";
 import { aggregateOne } from "../src/aggregate.ts";
 import { evaluate, type Config } from "../src/evaluate.ts";
@@ -28,8 +28,8 @@ describe("classify", () => {
     expect(classify(rows("X", ["timeout"])[0])).toBe("timeout");
   });
   it("separates 429, auth, validation and 5xx", () => {
-    expect(["429", "401", "403", "422", "503"].map((c) => classify(rows("X", [c])[0])))
-      .toEqual(["rate_limited", "auth", "auth", "client_error", "server_error"]);
+    expect(["429", "401", "403", "422", "503", "408"].map((c) => classify(rows("X", [c])[0])))
+      .toEqual(["rate_limited", "auth", "auth", "client_error", "server_error", "timeout"]);
   });
   it("trusts the HTTP code over the status string, and flags unknown statuses", () => {
     expect(classify({ ...rows("X", ["ok"])[0], status: "success", statusCode: 500 })).toBe("server_error");
@@ -54,6 +54,14 @@ describe("seed data end to end", () => {
   });
   it("sorts worst first, critical first within a status", () => {
     expect(report.integrations[0].integration).toBe("ADP Payroll Sync");
+  });
+  it("a 24 h window over 1 h of logs gives the same verdicts, with no false volume alarm", () => {
+    const load = loadLogs("data/integration_logs.json");
+    const day = buildReport(load, { ...baseCfg, windowMinutes: 1440 }, defaultAsOf(load));
+    for (const h of day.integrations) {
+      expect(h.status).toBe(by[h.integration].status);
+      expect(h.reasons.join()).not.toContain("Volume dropped");
+    }
   });
 });
 
@@ -96,10 +104,20 @@ describe("edge cases", () => {
     expect(health(r).reasons.join()).toContain("Volume dropped");
   });
 
+  it("log coverage is global, so a 24 h window still catches one integration's drop", () => {
+    // Slack's logs span the hour; ADP only sent 5 requests at the end of it.
+    const load = { rows: [...rows("Slack Notifications", ok(12)), ...rows("ADP Payroll Sync", ok(12)).slice(7)], rejected: [] };
+    const report = buildReport(load, { ...baseCfg, windowMinutes: 1440 }, ASOF, ASOF);
+    const adp = report.integrations.find((h) => h.integration === "ADP Payroll Sync")!;
+    expect(adp.reasons.join()).toContain("Volume dropped");
+  });
+
   it("a single auth failure surfaces and routes to Customer Success", () => {
     const h = health(rows("Slack Notifications", [...ok(11), "401"]));
     expect(h.status).toBe("degraded");
     expect(h.owners.join()).toContain("Customer Success");
+    // Auth skips the 2-failure threshold, so it must not also be called "isolated".
+    expect(h.notes.join()).not.toContain("isolated");
   });
 
   it("p95 latency is judged against the integration's own baseline", () => {
@@ -150,5 +168,34 @@ describe("edge cases", () => {
     const report = buildReport(load, baseCfg, ASOF);
     expect(report.overall.warnings.join()).toContain("2 log row(s) rejected");
     expect(report.overall.warnings.join()).toContain("log pipeline");
+  });
+});
+
+describe("config validation", () => {
+  const raw = () => JSON.parse(JSON.stringify(baseCfg));
+  const invalid = (mutate: (c: any) => void) => {
+    const c = raw();
+    mutate(c);
+    return () => validateConfig(c);
+  };
+
+  it("accepts the shipped config", () => {
+    expect(() => validateConfig(raw())).not.toThrow();
+  });
+  it("rejects a misspelled threshold level instead of silently disabling the rule", () => {
+    expect(invalid((c) => { c.failureRatePct = { degraded: 1, unhealty: 5 }; })).toThrow(/unhealty/);
+  });
+  it("rejects a misspelled top-level key (minFailures would otherwise turn everything green)", () => {
+    expect(invalid((c) => { c.minFailure = c.minFailures; delete c.minFailures; })).toThrow(/minFailure/);
+  });
+  it("rejects a misspelled per-integration field", () => {
+    expect(invalid((c) => { c.integrations["ADP Payroll Sync"].expectedPerHr = 12; })).toThrow(/expectedPerHr/);
+  });
+  it("rejects levels in the wrong order, including volume where lower is worse", () => {
+    expect(invalid((c) => { c.failureRatePct = { degraded: 5, unhealthy: 1 }; })).toThrow(/failureRatePct/);
+    expect(invalid((c) => { c.volumeVsExpected = { degraded: 0.2, unhealthy: 0.5 }; })).toThrow(/volumeVsExpected/);
+  });
+  it("reports every problem at once", () => {
+    expect(invalid((c) => { delete c.windowMinutes; c.rateLimitedPct = {}; })).toThrow(/windowMinutes[\s\S]*rateLimitedPct/);
   });
 });

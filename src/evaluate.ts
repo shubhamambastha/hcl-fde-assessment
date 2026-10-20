@@ -39,8 +39,10 @@ function failureBreakdown(s: Stats, kinds: FailureOutcome[]): string {
 }
 
 const HARD: FailureOutcome[] = ["timeout", "server_error", "auth", "client_error", "unknown"];
+const ISOLATABLE: FailureOutcome[] = HARD.filter((k) => k !== "auth");
 
-export function evaluate(s: Stats, cfg: Config, asOf: Date): Health {
+// coveredMinutes: how much of the window the logs actually span (see report.ts). Defaults to the whole window.
+export function evaluate(s: Stats, cfg: Config, asOf: Date, coveredMinutes = cfg.windowMinutes): Health {
   const ic = cfg.integrations[s.integration];
   const flags: { level: Status; reason: string }[] = [];
   const notes: string[] = [];
@@ -58,8 +60,9 @@ export function evaluate(s: Stats, cfg: Config, asOf: Date): Health {
       : `No requests at all in the last ${cfg.windowMinutes} min`);
   }
 
-  // 2. Volume drop vs what this integration normally sends.
-  const expected = ic?.expectedPerHour !== undefined ? (ic.expectedPerHour * cfg.windowMinutes) / 60 : undefined;
+  // 2. Volume drop vs what this integration normally sends, over the part of the window the logs cover.
+  // Without this, a 24 h window on 1 h of logs "expects" 24x the traffic and turns everything red.
+  const expected = ic?.expectedPerHour !== undefined ? (ic.expectedPerHour * coveredMinutes) / 60 : undefined;
   if (expected && s.total > 0) {
     const ratio = s.total / expected;
     const level = ratio < cfg.volumeVsExpected.unhealthy ? "unhealthy" : ratio < cfg.volumeVsExpected.degraded ? "degraded" : null;
@@ -73,9 +76,10 @@ export function evaluate(s: Stats, cfg: Config, asOf: Date): Health {
       const since = s.firstFailure ? `, since ${hhmm(s.firstFailure)}` : "";
       flag(level, `${r1(s.failureRatePct)}% of requests failing (${s.hardFailures}/${s.total}): ${failureBreakdown(s, HARD)}${since}`);
     }
-  } else if (s.hardFailures > 0) {
-    const t = s.timeline.filter((e) => e.outcome !== "success" && e.outcome !== "rate_limited").map((e) => hhmm(e.t));
-    notes.push(`${failureBreakdown(s, HARD)} at ${t.join(", ")}: isolated, below the ${cfg.minFailures}-failure threshold`);
+  } else {
+    // Auth is left out: it deliberately skips the threshold (rule 4), so it is never "isolated".
+    const t = s.timeline.filter((e) => ISOLATABLE.includes(e.outcome as FailureOutcome)).map((e) => hhmm(e.t));
+    if (t.length) notes.push(`${failureBreakdown(s, ISOLATABLE)} at ${t.join(", ")}: isolated, below the ${cfg.minFailures}-failure threshold`);
   }
 
   // 4. Auth never "flakes": one 401/403 means someone's credentials are broken.

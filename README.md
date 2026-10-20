@@ -10,7 +10,7 @@ Requires Node.js **22.18+** (check with `node -v`). It runs TypeScript directly,
 ```bash
 npm install
 npm run report          # CLI table + out/report.json + out/dashboard.html
-npm test                # 20 tests: edge cases + seed-data scenarios
+npm test                # 28 tests: edge cases, seed-data scenarios, config validation
 npm run typecheck
 ```
 
@@ -34,6 +34,8 @@ Every number is in `config/thresholds.jsonc`. The failure-rate defaults are degr
 ```
 
 Then run `npm run report` again. DocuSign goes from degraded to unhealthy.
+
+The config is checked at startup. A misspelled or missing key, or levels in the wrong order, stops the run with a clear error and no report. Without that check, a typo would silently switch a rule off.
 
 ## Output on the seed data
 

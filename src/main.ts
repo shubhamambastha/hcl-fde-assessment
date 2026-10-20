@@ -18,7 +18,13 @@ const { values, positionals } = parseArgs({
   },
 });
 
-const cfg: Config = loadConfig(values.config);
+let cfg: Config;
+try {
+  cfg = loadConfig(values.config);
+} catch (e) {
+  console.error(`${values.config}: ${(e as Error).message}`);
+  process.exit(1);
+}
 const load = loadLogs(positionals[0] ?? "data/integration_logs.json");
 const asOfArg = values["as-of"];
 const asOf = !asOfArg ? defaultAsOf(load) : asOfArg === "now" ? new Date() : new Date(asOfArg);

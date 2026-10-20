@@ -51,5 +51,54 @@ export function loadLogs(path: string): LoadResult {
 // Config is JSON with whole-line `//` comments (.jsonc). Only full comment lines are stripped,
 // so a "//" inside a string value can never be mistaken for a comment.
 export function loadConfig(path: string): Config {
-  return JSON.parse(readFileSync(path, "utf8").replace(/^\s*\/\/.*$/gm, ""));
+  return validateConfig(JSON.parse(readFileSync(path, "utf8").replace(/^\s*\/\/.*$/gm, "")));
+}
+
+const NUMBERS = ["windowMinutes", "minRequests", "minFailures", "silentAfterMinutes"] as const;
+const BANDS = ["failureRatePct", "rateLimitedPct", "p95VsBaseline", "volumeVsExpected"] as const;
+const INTEGRATION_KEYS = ["critical", "expectedPerHour", "baselineP95Ms"];
+
+// A misspelled key must stop the run, not quietly switch a rule off: a typo in `minFailures`
+// alone would otherwise turn every integration green. All problems are reported at once.
+export function validateConfig(raw: any): Config {
+  const errors: string[] = [];
+  const isNum = (v: unknown) => typeof v === "number" && Number.isFinite(v) && v >= 0;
+  const known = new Set<string>([...NUMBERS, ...BANDS, "integrations"]);
+
+  for (const k of Object.keys(raw ?? {})) if (!known.has(k)) errors.push(`unknown key "${k}"`);
+  for (const k of NUMBERS) if (!isNum(raw?.[k])) errors.push(`"${k}" must be a number >= 0`);
+  if (isNum(raw?.windowMinutes) && raw.windowMinutes <= 0) errors.push(`"windowMinutes" must be > 0`);
+  if (isNum(raw?.minFailures) && raw.minFailures < 1) errors.push(`"minFailures" must be >= 1`);
+
+  for (const k of BANDS) {
+    const b = raw?.[k];
+    for (const extra of Object.keys(b ?? {})) {
+      if (extra !== "degraded" && extra !== "unhealthy") errors.push(`${k}: unknown key "${extra}"`);
+    }
+    if (!isNum(b?.degraded) || !isNum(b?.unhealthy)) {
+      errors.push(`${k} needs numeric "degraded" and "unhealthy"`);
+    } else if (k === "volumeVsExpected" ? b.degraded < b.unhealthy : b.degraded > b.unhealthy) {
+      // Volume: lower is worse, so the red line sits below the amber line. Everything else: higher is worse.
+      errors.push(k === "volumeVsExpected"
+        ? `${k}: "unhealthy" must be <= "degraded" (lower volume is worse)`
+        : `${k}: "degraded" must be <= "unhealthy"`);
+    }
+  }
+
+  if (typeof raw?.integrations !== "object" || raw.integrations === null || Array.isArray(raw.integrations)) {
+    errors.push(`"integrations" must be an object`);
+  } else {
+    for (const [name, ic] of Object.entries<any>(raw.integrations)) {
+      for (const k of Object.keys(ic ?? {})) {
+        if (!INTEGRATION_KEYS.includes(k)) errors.push(`integrations."${name}": unknown key "${k}" (allowed: ${INTEGRATION_KEYS.join(", ")})`);
+      }
+      if (ic?.critical !== undefined && typeof ic.critical !== "boolean") errors.push(`integrations."${name}".critical must be true or false`);
+      for (const k of ["expectedPerHour", "baselineP95Ms"]) {
+        if (ic?.[k] !== undefined && !(isNum(ic[k]) && ic[k] > 0)) errors.push(`integrations."${name}".${k} must be a number > 0`);
+      }
+    }
+  }
+
+  if (errors.length) throw new Error(`Invalid config:\n  - ${errors.join("\n  - ")}`);
+  return raw as Config;
 }
