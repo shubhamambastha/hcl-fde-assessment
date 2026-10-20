@@ -15,7 +15,7 @@ npm run typecheck
 npm run summary         # same report plus the optional AI summary (needs ANTHROPIC_API_KEY)
 ```
 
-Open `out/dashboard.html` in a browser.
+**Dashboard:** there is no frontend server or build. `npm run report` writes `out/dashboard.html`, a single static page with no scripts or external assets. Open the file directly in a browser (`open out/dashboard.html` on macOS). `out/` is gitignored, so run the report first.
 
 Options:
 
