@@ -12,6 +12,7 @@ npm install
 npm run report          # CLI table + out/report.json + out/dashboard.html
 npm test                # 28 tests: edge cases, seed-data scenarios, config validation
 npm run typecheck
+npm run summary         # same report plus the optional AI summary (needs ANTHROPIC_API_KEY)
 ```
 
 Open `out/dashboard.html` in a browser.
@@ -35,6 +36,8 @@ Every number is in `config/thresholds.jsonc`. The failure-rate defaults are degr
 
 Then run `npm run report` again. DocuSign goes from degraded to unhealthy.
 
+To show a 24-hour view, set `"windowMinutes": 1440`. Expected volume only counts the time the logs actually cover, so the 1-hour seed data gives the same verdicts and no false volume alarms.
+
 The config is checked at startup. A misspelled or missing key, or levels in the wrong order, stops the run with a clear error and no report. Without that check, a typo would silently switch a rule off.
 
 ## Output on the seed data
@@ -43,7 +46,7 @@ The config is checked at startup. A misspelled or missing key, or levels in the 
 |---|---|---|
 | ADP Payroll Sync *(critical)* | ✖ unhealthy | 41.7% failing (5×500) since 09:05; last 2 OK, may be recovering |
 | Greenhouse ATS Sync | ✖ unhealthy | 50% failing: 5 timeouts + 1×500 since 09:05 |
-| DocuSign Envelope API | ▲ degraded | 33% rate-limited (429); latency normal for DocuSign |
+| DocuSign Envelope API | ▲ degraded | 33% rate-limited (4×429), no hard failures |
 | Slack Notifications | ● healthy | 1 isolated 500 at 09:30 (below the 2-failure threshold) |
 | Workday Directory Sync | ● healthy | 1 isolated 503 at 09:30 |
 
@@ -51,7 +54,7 @@ The config is checked at startup. A misspelled or missing key, or levels in the 
 
 ```
 config/thresholds.jsonc  all thresholds, per-integration baselines, criticality
-src/load.ts              parse + validate (bad rows rejected and reported)
+src/load.ts              parse + validate logs (bad rows rejected and reported); load + check config
 src/classify.ts          one outcome per request + owner per outcome
 src/aggregate.ts         per-integration metrics for the window
 src/evaluate.ts          rules → status + reasons; roll-up
@@ -70,7 +73,7 @@ The starter helpers were ported as follows. `load_logs` became `load.ts`, with v
 
 - **No tenant ID in the logs**, so one customer's expired credentials and a provider outage look the same. This is the first data ask.
 - **Baselines are static config values, set from the seed hour itself.** As a result, the latency rule can't fire on the seed data, and it only runs where there are ≥ 10 successful requests (Slack and Workday). It is exercised by tests, not by the seed data. Production would use a trailing 7-day baseline.
-- **Small samples.** At 12 requests per hour, rates move in 8.3% steps. The 2-failure gate and the `insufficient_data` status reduce false alarms but can't remove them. p95 is only judged with ≥ 10 successful requests.
+- **Small samples.** At 12 requests per hour, rates move in 8.3% steps. The 2-failure gate and the `insufficient_data` status reduce false alarms but can't remove them.
 - **Timestamps are assumed to be UTC**, since the seed data has no zone.
 - **The overall colour is the worst single status.** That works for 5 integrations. At 200 the counts line is the real summary (see [docs/SOLUTION_DESIGN.md](docs/SOLUTION_DESIGN.md) §4).
 - **Batch only.** There is no scheduler, alert delivery, history or acknowledgement state. Cron plus this CLI is the v1 deployment.
