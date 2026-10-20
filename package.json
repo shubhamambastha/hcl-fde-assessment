@@ -11,7 +11,7 @@
     "report": "node src/main.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "summary": "node src/main.ts --summary"
+    "summary": "node --env-file-if-exists=.env src/main.ts --summary"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",

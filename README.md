@@ -24,7 +24,7 @@ node src/main.ts [logs.json] [--config config/thresholds.jsonc] [--as-of <ISO>|n
 ```
 
 - `--as-of`: the end of the window. It defaults to the newest log line because the seed data is historical. Use `now` in production, so a dead log feed also shows up as silence. Either way, if the newest log is older than `silentAfterMinutes`, a banner says the report is historical. On the seed data that banner always shows, which is expected: the logs are from August 2026.
-- `--summary`: adds an AI-written morning note (Claude) to the CLI and dashboard. It needs `ANTHROPIC_API_KEY`. If the call fails, the rule-based report still ships and a one-line notice explains why.
+- `--summary`: adds an AI-written morning note (Claude) to the CLI and dashboard. It needs `ANTHROPIC_API_KEY`: run `cp .env.example .env` and fill it in (`npm run summary` loads `.env` with Node's built-in `--env-file-if-exists`; `.env` is gitignored), or export it in your shell. If the call fails, the rule-based report still ships and a one-line notice explains why.
 
 ## Change a threshold live
 
